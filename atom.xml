@@ -5,7 +5,7 @@
   <link href="/atom.xml" rel="self"/>
   
   <link href="http://yoursite.com/"/>
-  <updated>2016-09-05T07:02:04.300Z</updated>
+  <updated>2016-09-05T09:00:28.511Z</updated>
   <id>http://yoursite.com/</id>
   
   <author>
@@ -16,11 +16,11 @@
   <generator uri="http://hexo.io/">Hexo</generator>
   
   <entry>
-    <title>haha</title>
+    <title>code changes the world!</title>
     <link href="http://yoursite.com/2016/09/05/haha/"/>
     <id>http://yoursite.com/2016/09/05/haha/</id>
     <published>2016-09-05T07:00:12.000Z</published>
-    <updated>2016-09-05T07:02:04.300Z</updated>
+    <updated>2016-09-05T09:00:28.511Z</updated>
     
     <content type="html"><![CDATA[<h1 id="代码改变世界"><a href="#代码改变世界" class="headerlink" title="代码改变世界"></a>代码改变世界</h1><pre><code>public static void main(String[] args){
     System.out.println(&quot;Hello World&quot;);
