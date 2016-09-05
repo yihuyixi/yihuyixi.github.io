@@ -103,7 +103,7 @@
 <meta property="og:image" content="https://raw.githubusercontent.com/xyzlmn/Resouces/master/gif/ui/tab.gif">
 <meta property="og:image" content="https://raw.githubusercontent.com/xyzlmn/Resouces/master/gif/ui/collapsing.gif">
 <meta property="og:image" content="https://raw.githubusercontent.com/xyzlmn/Resouces/master/gif/ui/behavior.gif">
-<meta property="og:updated_time" content="2016-09-05T06:38:24.203Z">
+<meta property="og:updated_time" content="2016-09-05T06:43:25.178Z">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="CoordinatorLayout">
 <meta name="twitter:description" content="Coordinator Layout的使用一、CoordinatorLayout的作用?CoordinatorLayout作为”super-powered FrameLayout” 基本实现两个功能:
@@ -193,7 +193,7 @@
             
               <i class="menu-item-icon fa fa-fw fa-home"></i> <br />
             
-            Startseite
+            Home
           </a>
         </li>
       
@@ -203,7 +203,7 @@
             
               <i class="menu-item-icon fa fa-fw fa-archive"></i> <br />
             
-            Archiv
+            Archives
           </a>
         </li>
       
@@ -266,7 +266,7 @@
             <span class="post-meta-item-icon">
               <i class="fa fa-calendar-o"></i>
             </span>
-            <span class="post-meta-item-text">Veröffentlicht am</span>
+            <span class="post-meta-item-text">Posted on</span>
             <time itemprop="dateCreated" datetime="2016-09-05T14:37:36+08:00" content="2016-09-05">
               2016-09-05
             </time>
@@ -305,8 +305,7 @@
 </ol>
 <p><strong>加入类库:</strong></p>
 <pre><code>compile &apos;com.android.support:design:22.2.1&apos;
-</code></pre><p>###二、 CoordinatorLayout的简单使用案例 ###</p>
-<pre><code>&lt;?xml version=&quot;1.0&quot; encoding=&quot;utf-8&quot;?&gt;
+</code></pre><h3 id="二、-CoordinatorLayout的简单使用案例"><a href="#二、-CoordinatorLayout的简单使用案例" class="headerlink" title="二、 CoordinatorLayout的简单使用案例"></a>二、 CoordinatorLayout的简单使用案例</h3><pre><code>&lt;?xml version=&quot;1.0&quot; encoding=&quot;utf-8&quot;?&gt;
 &lt;android.support.design.widget.CoordinatorLayout
 xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;
 xmlns:app=&quot;http://schemas.android.com/apk/res-auto&quot;
@@ -448,8 +447,15 @@ android:layout_height=&quot;match_parent&quot;&gt;
 1.CoordinatorLayout作为布局的父布局容器.
 2.给需要滑动的组件设置app:layout_scrollFlags = &quot;scroll|enterAlways&quot;属性
 3.给滑动的组件设置app:layout_behavior属性
-</code></pre><p>###三、AppBarLayuut嵌套CollapsingToolbarLayout<br>    &lt;?xml version=”1.0” encoding=”utf-8”?&gt;<br>    <android.support.design.widget.coordinatorlayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto" android:id="@+id/main_content" android:layout_width="match_parent" android:layout_height="match_parent" android:fitssystemwindows="true"></android.support.design.widget.coordinatorlayout></p>
-<pre><code>&lt;android.support.design.widget.AppBarLayout
+</code></pre><h3 id="三、AppBarLayuut嵌套CollapsingToolbarLayout"><a href="#三、AppBarLayuut嵌套CollapsingToolbarLayout" class="headerlink" title="三、AppBarLayuut嵌套CollapsingToolbarLayout"></a>三、AppBarLayuut嵌套CollapsingToolbarLayout</h3><pre><code>&lt;?xml version=&quot;1.0&quot; encoding=&quot;utf-8&quot;?&gt;
+&lt;android.support.design.widget.CoordinatorLayout xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;
+xmlns:app=&quot;http://schemas.android.com/apk/res-auto&quot;
+android:id=&quot;@+id/main_content&quot;
+android:layout_width=&quot;match_parent&quot;
+android:layout_height=&quot;match_parent&quot;
+android:fitsSystemWindows=&quot;true&quot;&gt;
+
+&lt;android.support.design.widget.AppBarLayout
     android:id=&quot;@+id/appbar&quot;
     android:layout_width=&quot;match_parent&quot;
     android:layout_height=&quot;256dp&quot;
@@ -554,7 +560,7 @@ app:layout_anchorGravity=&quot;bottom|right|end&quot;
 1.AppBarLayout的高度固定
 2.CollapsingToolbarLayout的子视图设置Layout_collapseMode属性
 3.关联悬浮视图设置app:layout_anchor,app:layout_anchorGravity属性
-</code></pre><p>###四、自定义Behavior<br>CoordinatorLayout功能如此强大,而他的神奇之处在于Behavior对象,CoordinatorLayout自己并不控制View,所有的控制权都在Behavior,前面写到了FloatingActionButton.Behavior,AppBarLayout.Behavior,AppBarLayout.ScrollingViewBehavior.AppBarLayout中有两个Behavior,一个是拿来给他自己用的,另一个是拿来给他的兄弟节点用的.这些Behavior实现了复杂的控制功能.系统的Behavior毕竟有限,我们可以通过自定义的方式来实现自己的Behavior.</p>
+</code></pre><h3 id="四、自定义Behavior"><a href="#四、自定义Behavior" class="headerlink" title="四、自定义Behavior"></a>四、自定义Behavior</h3><p>CoordinatorLayout功能如此强大,而他的神奇之处在于Behavior对象,CoordinatorLayout自己并不控制View,所有的控制权都在Behavior,前面写到了FloatingActionButton.Behavior,AppBarLayout.Behavior,AppBarLayout.ScrollingViewBehavior.AppBarLayout中有两个Behavior,一个是拿来给他自己用的,另一个是拿来给他的兄弟节点用的.这些Behavior实现了复杂的控制功能.系统的Behavior毕竟有限,我们可以通过自定义的方式来实现自己的Behavior.</p>
 <p>通过CoordinatorLayout.Behavior(YourView.Behavior.class)来定义自己的Behavior,并在自己的layout文件中设置app:layout_behavior=”com.example.app.YourView$Behavior”来达到效果.</p>
 <p>自定义Behavior需要重写两个方法:</p>
 <pre><code>public boolean layoutDependsOn(CoordinatorLayout parent,View child,View dependency)
@@ -699,10 +705,10 @@ android:fitsSystemWindows=&quot;true&quot;&gt;
       
         <ul class="sidebar-nav motion-element">
           <li class="sidebar-nav-toc sidebar-nav-active" data-target="post-toc-wrap" >
-            Inhaltsverzeichnis
+            Table of Contents
           </li>
           <li class="sidebar-nav-overview" data-target="site-overview">
-            Übersicht
+            Overview
           </li>
         </ul>
       
@@ -719,7 +725,7 @@ android:fitsSystemWindows=&quot;true&quot;&gt;
           <div class="site-state-item site-state-posts">
             <a href="/archives">
               <span class="site-state-item-count">3</span>
-              <span class="site-state-item-name">Artikel</span>
+              <span class="site-state-item-name">posts</span>
             </a>
           </div>
 
@@ -750,7 +756,7 @@ android:fitsSystemWindows=&quot;true&quot;&gt;
               
             
             
-              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#Coordinator-Layout的使用"><span class="nav-number">1.</span> <span class="nav-text">Coordinator Layout的使用</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#一、CoordinatorLayout的作用"><span class="nav-number">1.0.1.</span> <span class="nav-text">一、CoordinatorLayout的作用?</span></a></li></ol></li></ol></li></ol></div>
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#Coordinator-Layout的使用"><span class="nav-number">1.</span> <span class="nav-text">Coordinator Layout的使用</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#一、CoordinatorLayout的作用"><span class="nav-number">1.0.1.</span> <span class="nav-text">一、CoordinatorLayout的作用?</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#二、-CoordinatorLayout的简单使用案例"><span class="nav-number">1.0.2.</span> <span class="nav-text">二、 CoordinatorLayout的简单使用案例</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#三、AppBarLayuut嵌套CollapsingToolbarLayout"><span class="nav-number">1.0.3.</span> <span class="nav-text">三、AppBarLayuut嵌套CollapsingToolbarLayout</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#四、自定义Behavior"><span class="nav-number">1.0.4.</span> <span class="nav-text">四、自定义Behavior</span></a></li></ol></li></ol></li></ol></div>
             
           </div>
         </section>
@@ -777,7 +783,7 @@ android:fitsSystemWindows=&quot;true&quot;&gt;
 </div>
 
 <div class="powered-by">
-  Erstellt mit  <a class="theme-link" href="https://hexo.io">Hexo</a>
+  Powered by <a class="theme-link" href="https://hexo.io">Hexo</a>
 </div>
 
 <div class="theme-info">
