@@ -674,7 +674,7 @@ app:layout_anchorGravity=&quot;bottom|right|end&quot;
 1.AppBarLayout的高度固定
 2.CollapsingToolbarLayout的子视图设置Layout_collapseMode属性
 3.关联悬浮视图设置app:layout_anchor,app:layout_anchorGravity属性
-</code></pre><h3 id="四、自定义Behavior"><a href="#四、自定义Behavior" class="headerlink" title="四、自定义Behavior"></a>四、自定义Behavior</h3><p>CoordinatorLayout功能如此强大,而他的神奇之处在于Behavior对象,CoordinatorLayout自己并不控制View,所有的控制权都在Behavior,前面写到了FloatingActionButton.Behavior,AppBarLayout.Behavior,AppBarLayout.ScrollingViewBehavior.AppBarLayout中有两个Behavior,一个是拿来给他自己用的,另一个是拿来给他的兄弟节点用的.这些Behavior实现了复杂的控制功能.系统的Behavior毕竟有限,我们可以通过自定义的方式来实现自己的Behavior.</p>
+</code></pre><h3 id="四、自定义Behavior"><a href="#四、自定义Behavior" class="headerlink" title="四、自定义Behavior"></a>四、自定义Behavior</h3><p>CoordinatorLayout功能如此强大,而他的神奇之处在于Behavior对象,CoordinatorLayout自己并不控制View,所有的控制权都在<br>Behavior,前面写到了FloatingActionButton.Behavior,AppBarLayout.Behavior,AppBarLayout.ScrollingViewBehavior.AppBarLayout中有两个Behavior,一个是拿来给他自己用的,另一个是拿来给他的兄弟节点用的.这些Behavior实现了复杂的控制功能.系统的Behavior毕竟有限,我们可以通过自定义的方式来实现自己的Behavior.</p>
 <p>通过CoordinatorLayout.Behavior(YourView.Behavior.class)来定义自己的Behavior,并在自己的layout文件中设置app:layout_behavior=”com.example.app.YourView$Behavior”来达到效果.</p>
 <p>自定义Behavior需要重写两个方法:</p>
 <pre><code>public boolean layoutDependsOn(CoordinatorLayout parent,View child,View dependency)
