@@ -5,7 +5,7 @@
   <link href="/atom.xml" rel="self"/>
   
   <link href="http://yoursite.com/"/>
-  <updated>2016-09-05T09:00:28.511Z</updated>
+  <updated>2018-01-03T01:40:18.979Z</updated>
   <id>http://yoursite.com/</id>
   
   <author>
@@ -16,21 +16,198 @@
   <generator uri="http://hexo.io/">Hexo</generator>
   
   <entry>
-    <title>code changes the world!</title>
-    <link href="http://yoursite.com/2016/09/05/haha/"/>
-    <id>http://yoursite.com/2016/09/05/haha/</id>
-    <published>2016-09-05T07:00:12.000Z</published>
-    <updated>2016-09-05T09:00:28.511Z</updated>
+    <title>android图片压缩</title>
+    <link href="http://yoursite.com/2017/08/10/android%E5%9B%BE%E7%89%87%E5%8E%8B%E7%BC%A9/"/>
+    <id>http://yoursite.com/2017/08/10/android图片压缩/</id>
+    <published>2017-08-10T09:45:01.000Z</published>
+    <updated>2018-01-03T01:40:18.979Z</updated>
     
-    <content type="html"><![CDATA[<h1 id="代码改变世界"><a href="#代码改变世界" class="headerlink" title="代码改变世界"></a>代码改变世界</h1><pre><code>public static void main(String[] args){
-    System.out.println(&quot;Hello World&quot;);
+    <content type="html"><![CDATA[<h2 id="Bitmap的创建"><a href="#Bitmap的创建" class="headerlink" title="Bitmap的创建"></a>Bitmap的创建</h2><blockquote>
+<p>创建Bitmap的时候，Java不提供new Bitmap()的形式去创建，而是通过BitmapFactory中的静态方法去创建,如:BitmapFactory.decodeStream(is);//通过InputStream去解析生成Bitmap(这里就不贴BitmapFactory中创建Bitmap的方法了，大家可以自己去看它的源码)，我们跟进BitmapFactory中创建Bitmap的源码，最终都可以追溯到这几个native函数<a id="more"></a></p>
+</blockquote>
+<pre><code>private static native Bitmap nativeDecodeStream(InputStream is, byte[] storage,
+            Rect padding, Options opts);
+private static native Bitmap nativeDecodeFileDescriptor(FileDescriptor fd,
+        Rect padding, Options opts);
+private static native Bitmap nativeDecodeAsset(long nativeAsset, Rect padding, Options opts);
+private static native Bitmap nativeDecodeByteArray(byte[] data, int offset,
+        int length, Options opts);
+</code></pre><blockquote>
+<p>而Bitmap又是Java对象，这个Java对象又是从native，也就是C/C++中产生的，所以，在Android中Bitmap的内存管理涉及到两部分，一部分是native，另一部分是dalvik，也就是我们常说的java堆(如果对java堆与栈不了解的同学可以戳)，到这里基本就已经了解了创建Bitmap的一些内存中的特性(大家可以使用adb shell dumpsys meminfo去查看Bitmap实例化之后的内存使用情况)。</p>
+<h2 id="Bitmap的使用"><a href="#Bitmap的使用" class="headerlink" title="Bitmap的使用"></a>Bitmap的使用</h2><p>我们已经知道了BitmapFactory是如何通过各种资源创建Bitmap了，那么我们如何合理的使用它呢？以下是几个我们使用Bitmap需要关注的点</p>
+<h2 id="size"><a href="#size" class="headerlink" title="size"></a>size</h2><p> size:这里我们来算一下，在Android中，如果采用Config.ARGB_8888的参数去创建一个Bitmap，这是Google推荐的配置色彩参数，也是Android4.4及以上版本默认创建Bitmap的Config参数(Bitmap.Config.inPreferredConfig的默认值)，那么每一个像素将会占用4byte，如果一张手机照片的尺寸为1280×720，那么我们可以很容易的计算出这张图片占用的内存大小为 1280x720x4 = 3686400(byte) = 3.5M，一张未经处理的照片就已经3.5M了! 显而易见，在开发当中，这是我们最需要关注的问题，否则分分钟OOM!因此需要对Bitmap进行压缩处理，一般Android应用开发中几种常见的图片压缩方法，分别是：质量压缩法、比例压缩法（根据路径获取图片并压缩）和比例压缩法（根据Bitmap图片压缩）以及通过matrix对位图进行缩放。</p>
+<h3 id="质量压缩法"><a href="#质量压缩法" class="headerlink" title="质量压缩法"></a>质量压缩法</h3><pre><code>private Bitmap compressImage(Bitmap image) {
+</code></pre></blockquote>
+<pre><code>    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    image.compress(Bitmap.CompressFormat.JPEG, 100, baos);//质量压缩方法，这里100表示不压缩，把压缩后的数据存放到baos中
+    int options = 100;
+    while ( baos.toByteArray().length / 1024&gt;100) { //循环判断如果压缩后图片是否大于100kb,大于继续压缩
+        baos.reset();//重置baos即清空baos
+        image.compress(Bitmap.CompressFormat.JPEG, options, baos);//这里压缩options%，把压缩后的数据存放到baos中
+        options -= 10;//每次都减少10
+    }
+    ByteArrayInputStream isBm = new ByteArrayInputStream(baos.toByteArray());//把压缩后的数据baos存放到ByteArrayInputStream中
+    Bitmap bitmap = BitmapFactory.decodeStream(isBm, null, null);//把ByteArrayInputStream数据生成图片
+    return bitmap;
 }
-</code></pre>]]></content>
+</code></pre><h3 id="图片按比例大小压缩"><a href="#图片按比例大小压缩" class="headerlink" title="图片按比例大小压缩"></a>图片按比例大小压缩</h3><pre><code>private Bitmap getimage(String srcPath) {
+    BitmapFactory.Options newOpts = new BitmapFactory.Options();
+    //开始读入图片，此时把options.inJustDecodeBounds 设回true了
+    newOpts.inJustDecodeBounds = true;
+    Bitmap bitmap = BitmapFactory.decodeFile(srcPath,newOpts);//此时返回bm为空
+
+    newOpts.inJustDecodeBounds = false;
+    int w = newOpts.outWidth;
+    int h = newOpts.outHeight;
+    //现在主流手机比较多是800*480分辨率，所以高和宽我们设置为
+    float hh = 800f;//这里设置高度为800f 或者获取屏幕的高
+    float ww = 480f;//这里设置宽度为480f 或者获取屏幕的宽
+    //缩放比。由于是固定比例缩放，只用高或者宽其中一个数据进行计算即可
+    int be = 1;//be=1表示不缩放
+    if (w &gt; h &amp;&amp; w &gt; ww) {//如果宽度大的话根据宽度固定大小缩放
+        be = (int) (newOpts.outWidth / ww);
+    } else if (w &lt; h &amp;&amp; h &gt; hh) {//如果高度高的话根据宽度固定大小缩放
+        be = (int) (newOpts.outHeight / hh);
+    }
+    if (be &lt;= 0)
+        be = 1;
+    newOpts.inSampleSize = be;//设置缩放比例
+    //重新读入图片，注意此时已经把options.inJustDecodeBounds 设回false了
+    bitmap = BitmapFactory.decodeFile(srcPath, newOpts);
+    return compressImage(bitmap);//压缩好比例大小后再进行质量压缩
+}
+</code></pre><h3 id="图片按比例大小压缩方法-（根据Bitmap图片压缩）"><a href="#图片按比例大小压缩方法-（根据Bitmap图片压缩）" class="headerlink" title="图片按比例大小压缩方法 （根据Bitmap图片压缩）"></a>图片按比例大小压缩方法 （根据Bitmap图片压缩）</h3><pre><code>private Bitmap comp(Bitmap image) {
+
+ByteArrayOutputStream baos = new ByteArrayOutputStream();
+image.compress(Bitmap.CompressFormat.JPEG, 100, baos);
+if( baos.toByteArray().length / 1024&gt;1024) {//判断如果图片大于1M,进行压缩避免在生成图片（BitmapFactory.decodeStream）时溢出
+    baos.reset();//重置baos即清空baos
+    image.compress(Bitmap.CompressFormat.JPEG, 50, baos);//这里压缩50%，把压缩后的数据存放到baos中
+}
+ByteArrayInputStream isBm = new ByteArrayInputStream(baos.toByteArray());
+BitmapFactory.Options newOpts = new BitmapFactory.Options();
+//开始读入图片，此时把options.inJustDecodeBounds 设回true了
+newOpts.inJustDecodeBounds = true;
+Bitmap bitmap = BitmapFactory.decodeStream(isBm, null, newOpts);
+newOpts.inJustDecodeBounds = false;
+int w = newOpts.outWidth;
+int h = newOpts.outHeight;
+//现在主流手机比较多是800*480分辨率，所以高和宽我们设置为
+float hh = 800f;//这里设置高度为800f
+float ww = 480f;//这里设置宽度为480f
+//缩放比。由于是固定比例缩放，只用高或者宽其中一个数据进行计算即可
+int be = 1;//be=1表示不缩放
+if (w &gt; h &amp;&amp; w &gt; ww) {//如果宽度大的话根据宽度固定大小缩放
+    be = (int) (newOpts.outWidth / ww);
+} else if (w &lt; h &amp;&amp; h &gt; hh) {//如果高度高的话根据宽度固定大小缩放
+    be = (int) (newOpts.outHeight / hh);
+}
+if (be &lt;= 0)
+    be = 1;
+newOpts.inSampleSize = be;//设置缩放比例
+//重新读入图片，注意此时已经把options.inJustDecodeBounds 设回false了
+isBm = new ByteArrayInputStream(baos.toByteArray());
+bitmap = BitmapFactory.decodeStream(isBm, null, newOpts);
+return compressImage(bitmap);//压缩好比例大小后再进行质量压缩
+}
+</code></pre><h3 id="通过matrix对原图进行缩放，可选取原图的一部分"><a href="#通过matrix对原图进行缩放，可选取原图的一部分" class="headerlink" title="通过matrix对原图进行缩放，可选取原图的一部分"></a>通过matrix对原图进行缩放，可选取原图的一部分</h3><pre><code>/**
+ *这种类似于上传图像时，在原图上扣下来一块的效果，控制非常灵活
+ * @param path 原图路径
+ * @param offsetX 截取开始点在X轴偏移量
+ * @param offsetY 截取开始点在Y轴偏移量
+ * @param targetW 截取多宽（像素）
+ * @param targetH 截取多高（像素）
+ * @return
+ */
+public static Bitmap matrixScale(String path,int offsetX,int offsetY,int targetW,int targetH){
+    // 构建原始位图
+    Bitmap bitmap = BitmapFactory.decodeFile(path);
+    // 获取原始宽高
+    int width = bitmap.getWidth();
+    int height = bitmap.getHeight();
+    // 计算宽高缩放比例，targetW，targetH即期待缩放完成后位图的宽高
+    float scaleW = (float)targetW / width;
+    float scaleH = (float)targetH / height;
+    // 将缩放比例放进矩阵
+    Matrix matrix = new Matrix();
+    matrix.postScale(scaleW, scaleH);
+    // 这个方法作用非常多，详细解释一下各个参数的意义！
+    // bitmap：原始位图
+    // 第二到第五个参数，即截取原图哪一部分构建新位图，
+    // offsetX和offsetY代表在X轴和Y轴上的像素偏移量，即从哪个位置开始截取
+    // width和height代表截取多少个像素，但是要注意，offsetX+width应该小于等于原图的宽度
+    // offsetY+height小于等于原图高度，要不然会报错，因为截到原图外面去了
+    // 像下面这样填写，就代表截取整个原图，
+    // Bitmap.createBitmap(bitmap, 0, 0, width, height, matrix, false);
+    // 如果填写100,100,200,200，就代表
+    // 从原图左上角往右和下各偏移100像素，然后往后和往下各截取200构建新位图
+    // matrix：缩放矩阵
+    // 最后一个参数表示如果矩阵里面还存放了过滤条件，是否按条件过滤（如果matrix里面只放了平移数据），最后一个参数设置成什么都不会生效
+    bitmap = Bitmap.createBitmap(bitmap, offsetX, offsetY, width, height, matrix, false);
+    return bitmap;
+}
+</code></pre><h2 id="reuse"><a href="#reuse" class="headerlink" title="reuse"></a>reuse</h2><p>上面说了BitmapFactory通过InputStream去创建Bitmap的这种方式，以及BitmapFactory.Options.inSimpleSize 和 BitmapFactory.Options.inJustDecodeBounds的使用方法，但将单个Bitmap加载到UI是简单的，但是如果我们需要一次性加载大量的图片，事情就会变得复杂起来。Bitmap是吃内存大户，我们不希望多次解析相同的Bitmap，也不希望可能不会用到的Bitmap一直存在于内存中，所以，这个场景下，Bitmap的重用变得异常的重要。 在这里只介绍一种BitmapFactory.Options.inBitmap的重用方式（三级缓存也可实现bitmap的重用，图片加载框架用的都是三级缓存）</p>
+<pre><code>根据官方文档[在Android 3.0 引进了BitmapFactory.Options.inBitmap](https://developer.android.com/reference/android/graphics/BitmapFactory.Options.html#inBitmap)，如果这个值被设置了，decode方法会在加载内容的时候去重用已经存在的bitmap. 这意味着bitmap的内存是被重新利用的，这样可以提升性能, 并且减少了内存的分配与回收。然而，使用inBitmap有一些限制。特别是在Android 4.4 之前，只支持同等大小的位图。
+我们看来看看这个参数最基本的运用方法。
+
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div></pre></td><td class="code"><pre><div class="line">new BitmapFactory.Options options = new BitmapFactory.Options();</div><div class="line">//inBitmap只有当inMutable为true的时候是可用的。</div><div class="line">options.inMutable = true;</div><div class="line">Bitmap reusedBitmap = BitmapFactory.decodeResource(getResources(),R.drawable.reused_btimap,options);</div><div class="line">options.inBitmap = reusedBitmap;</div></pre></td></tr></table></figure>
+
+
+  这样，当你在下一次decodeBitmap的时候，将设置了`options.inMutable=true`以及`options.inBitmap`的`Options`传入，Android就会复用你的Bitmap了，具体实例：
+
+```
+@Override
+protected void onCreate(@Nullable Bundle savedInstanceState) {
+    super.onCreate(savedInstanceState);
+    setContentView(reuseBitmap());
+}
+
+private LinearLayout reuseBitmap(){
+    LinearLayout linearLayout = new LinearLayout(this);
+    linearLayout.setLayoutParams(new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+    linearLayout.setOrientation(LinearLayout.VERTICAL);
+
+    ImageView iv = new ImageView(this);
+    iv.setLayoutParams(new ViewGroup.LayoutParams(500,300));
+
+    options = new BitmapFactory.Options();
+    options.inJustDecodeBounds = true;
+    //inBitmap只有当inMutable为true的时候是可用的。
+    options.inMutable = true;
+    BitmapFactory.decodeResource(getResources(),R.drawable.big_pic,options);
+
+    //压缩Bitmap到我们希望的尺寸
+    //确保不会OOM
+    options.inSampleSize = findBestSampleSize(options.outWidth,options.outHeight,500,300);
+    options.inJustDecodeBounds = false;
+
+    Bitmap bitmap = BitmapFactory.decodeResource(getResources(),R.drawable.big_pic,options);
+    options.inBitmap = bitmap;
+
+    iv.setImageBitmap(bitmap);
+
+    linearLayout.addView(iv);
+
+    ImageView iv1 = new ImageView(this);
+    iv1.setLayoutParams(new ViewGroup.LayoutParams(500,300));
+    iv1.setImageBitmap( BitmapFactory.decodeResource(getResources(),R.drawable.big_pic,options));
+    linearLayout.addView(iv1);
+
+    ImageView iv2 = new ImageView(this);
+    iv2.setLayoutParams(new ViewGroup.LayoutParams(500,300));
+    iv2.setImageBitmap( BitmapFactory.decodeResource(getResources(),R.drawable.big_pic,options));
+    linearLayout.addView(iv2);
+
+
+    return linearLayout;
+}
+</code></pre><p> 以上代码中，我们在解析了一次一张1080P分辨率的图片，并且设置在<code>options.inBitmap</code>中，然后分别decode了同一张图片，并且传入了相同的<code>options</code>。最终只占用一份第一次解析<code>Bitmap</code>的内存。</p>
+]]></content>
     
     <summary type="html">
     
-      &lt;h1 id=&quot;代码改变世界&quot;&gt;&lt;a href=&quot;#代码改变世界&quot; class=&quot;headerlink&quot; title=&quot;代码改变世界&quot;&gt;&lt;/a&gt;代码改变世界&lt;/h1&gt;&lt;pre&gt;&lt;code&gt;public static void main(String[] args){
-    Sy
+      &lt;h2 id=&quot;Bitmap的创建&quot;&gt;&lt;a href=&quot;#Bitmap的创建&quot; class=&quot;headerlink&quot; title=&quot;Bitmap的创建&quot;&gt;&lt;/a&gt;Bitmap的创建&lt;/h2&gt;&lt;blockquote&gt;
+&lt;p&gt;创建Bitmap的时候，Java不提供new Bitmap()的形式去创建，而是通过BitmapFactory中的静态方法去创建,如:BitmapFactory.decodeStream(is);//通过InputStream去解析生成Bitmap(这里就不贴BitmapFactory中创建Bitmap的方法了，大家可以自己去看它的源码)，我们跟进BitmapFactory中创建Bitmap的源码，最终都可以追溯到这几个native函数
     
     </summary>
     
@@ -42,23 +219,222 @@
   </entry>
   
   <entry>
-    <title>CoordinatorLayout</title>
-    <link href="http://yoursite.com/2016/09/05/CoordinatorLayout-0/"/>
-    <id>http://yoursite.com/2016/09/05/CoordinatorLayout-0/</id>
-    <published>2016-09-05T06:37:36.000Z</published>
-    <updated>2016-09-05T10:25:25.385Z</updated>
+    <title>设计模式</title>
+    <link href="http://yoursite.com/2017/06/08/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/"/>
+    <id>http://yoursite.com/2017/06/08/设计模式/</id>
+    <published>2017-06-08T02:26:01.000Z</published>
+    <updated>2018-01-03T01:42:11.612Z</updated>
     
-    <content type="html"><![CDATA[<h1 id="Coordinator-Layout的使用"><a href="#Coordinator-Layout的使用" class="headerlink" title="Coordinator Layout的使用"></a>Coordinator Layout的使用</h1><h3 id="一、CoordinatorLayout的作用"><a href="#一、CoordinatorLayout的作用" class="headerlink" title="一、CoordinatorLayout的作用?"></a>一、CoordinatorLayout的作用?</h3><p>CoordinatorLayout作为”super-powered FrameLayout” 基本实现两个功能:</p>
+    <content type="html"><![CDATA[<p> 模式是在某情境下（context），针对某问题的解决方案</p>
+<h2 id="oo基础"><a href="#oo基础" class="headerlink" title="oo基础"></a>oo基础</h2><ul>
+<li>抽象</li>
+<li>封装</li>
+<li>继承</li>
+<li>多态<a id="more"></a>
+<h2 id="oo原则"><a href="#oo原则" class="headerlink" title="oo原则"></a>oo原则</h2></li>
+<li>封装变化</li>
+<li>多用组合，少用继承</li>
+<li>针对接口编程，不针对实现编程</li>
+<li>为交互对象之间的松耦合而设计努力</li>
+<li>找出程序中会变化的方面，然后将其和固定不变的方面相分离</li>
+<li>类应该对扩展开放，对修改关闭</li>
+<li>依赖倒置原则：要依赖抽象，不要依赖具体类</li>
+<li>单一职责原则，类应该只做一件事，而且只做一件事</li>
+<li>最少知识原则：只和你的密友交谈</li>
+<li>别调用我们，我们会调用你。（高层组件对待低层组件的方式）</li>
+<li>高内聚，低耦合<h2 id="策略模式"><a href="#策略模式" class="headerlink" title="策略模式"></a>策略模式</h2><blockquote>
+<p>将行为封装成接口，实现具体的行为，传递到对象中。实现不同的策略</p>
+</blockquote>
+</li>
+</ul>
+<h2 id="观察者模式"><a href="#观察者模式" class="headerlink" title="观察者模式"></a>观察者模式</h2><blockquote>
+<p>出版者+订阅者 = 观察者模式 subject observer 观察者模式定义了对象之间的一对多的依赖，这样一来，当一个对象改变时，它的所有的依赖者都会收到通知并且自动更新</p>
+</blockquote>
+<h2 id="装饰者模式"><a href="#装饰者模式" class="headerlink" title="装饰者模式"></a>装饰者模式</h2><blockquote>
+<p>不改变接口，但加入责任</p>
+<p>动态地将责任附加到对象上。若要扩展功能，装饰者提供了比继承更有弹性的替代方案。</p>
+<p>装饰者和被装饰者具有相同的超类型</p>
+<p>你可以用一个或多个装饰者包装一个对象</p>
+<p>既然装饰者和被装饰者对象有相同的超类型，所以在任何需要原始对象（被包装的）的场合，可以用装饰过的对象替代它</p>
+<p>装饰者可以在所委托被装饰者的行为之前与/或之后，加上自己的行为，以达到特定目的</p>
+<p>对象可以在任何时候被装饰，所以可以在运行时，动态地、不限量地用你喜欢的装饰者来装饰对象</p>
+</blockquote>
+<pre><code>java中的I/O使用的就是装饰者模式，BufferedInputStream和LineNumberInputStream都扩展自FilterInputStream,而
+FilterInputStream是一个抽象的装饰类  FileInputStream就是一个具体的组件，这两个装饰类可以用来装饰FileInputStream
+</code></pre><h2 id="工厂模式"><a href="#工厂模式" class="headerlink" title="工厂模式"></a>工厂模式</h2><blockquote>
+<p>简单工厂不是一种设计模式，请注意</p>
+<p>工厂方法模式定义了一个创建对象的接口，但由子类决定要实例化的类是哪一个。工厂方法让类把实例化推迟到子类，工厂方法模式能够封装具体类型的的实例化</p>
+<p>抽象工厂模式提供了一个接口，用于创建相关或依赖对象的家族，而不需要明确指定具体类。在抽象工厂中，一般利用工厂方法去实现生产方法.通过传入不同的工厂，我们就会得到不同的产品家族</p>
+</blockquote>
+<h2 id="单例模式"><a href="#单例模式" class="headerlink" title="单例模式"></a>单例模式</h2><blockquote>
+<p>单例模式用来创建独一无二的对象，只能有一个实例的对象的入场券.单例模式确保一个类只有一个实例，并提供一个全局的访问点</p>
+<p>有些对象其实我们只需要一个，比方说：线程池(threadpool)、缓存(cache)、对话框、处理偏好设置和注册表的对象、日志对象，充当打印机、显卡等设备的驱动程序的对象。</p>
+<h3 id="懒汉式处理多线程？"><a href="#懒汉式处理多线程？" class="headerlink" title="懒汉式处理多线程？"></a>懒汉式处理多线程？</h3><ol>
+<li>在方法上加同步</li>
+<li>使用饿汉式，类初始化的时候加载实例</li>
+<li>使用双重检查加锁，只在第一次同步，也就是对象尚未创建的时候去同步（jdk1.5才支持，不能在5以下使用的）</li>
+</ol>
+</blockquote>
+<h2 id="命令模式"><a href="#命令模式" class="headerlink" title="命令模式"></a>命令模式</h2><p>命令模式将“请求”封装成对象，以便使用不同的请求、队列或者日志来参数化其他对象。命令模式也支持可撤销的操作。</p>
+<h3 id="命令模式的拆分"><a href="#命令模式的拆分" class="headerlink" title="命令模式的拆分"></a>命令模式的拆分</h3><ol>
+<li>command</li>
+<li>execute()</li>
+<li>client</li>
+<li>invoker</li>
+<li>receiver</li>
+<li>setCommand()<br><ul><br><li>Meta Command Pattern可以创建命令的宏，以便一次执行多个命令</li><br><li>NoCommand对象是一个空对象（null object）的例子。当你不想返回一个有意义的对象时，空对象就很有用。客户也可以将处理null责任转移给空对象。举例来说，遥控器不可能一出厂就设置有有意义的命令对象，所以提供了NoCommand对象作为替代品，当调用它的的execute()方法时，这种对象什么都不做</li><br><li>命令模式的更多用途：队列请求、日志请求</li><ul></ul></ul></li>
+</ol>
+<h2 id="适配器模式"><a href="#适配器模式" class="headerlink" title="适配器模式"></a>适配器模式</h2><p>将一个接口转换成另一个接口</p>
+<p>适配器模式将一个类的接口，转换成客户期望的另一个接口。适配器让原来接口不兼容的类可以合作无间</p>
+<h2 id="外观模式"><a href="#外观模式" class="headerlink" title="外观模式"></a>外观模式</h2><p>让接口更简单</p>
+<p>外观模式提供了一个统一的接口，用来访问子系统中的一群接口。外观定义了一个高层接口，让子系统更容易使用</p>
+<h2 id="模版方法模式"><a href="#模版方法模式" class="headerlink" title="模版方法模式"></a>模版方法模式</h2><p>模板方法定义了一个算法的步骤，并允许子类为一个或多个步骤提供实现</p>
+<p>模板方法模式在一个方法中定义一个算法的骨架，而将一些步骤延迟到子类中。模板方法使得子类可以在不改变算法结构的情况下，重新定义算法中的某些步骤</p>
+<h2 id="迭代器与组合模式"><a href="#迭代器与组合模式" class="headerlink" title="迭代器与组合模式"></a>迭代器与组合模式</h2><p>有许多种方法可以把对象堆起来成为一个集合</p>
+<p>提供一种方法顺序访问一个聚合对象中的各个元素，而又不暴露其内部的表示</p>
+<p>迭代器模式让我们能游走于聚合内的每一个元素，而又不暴露其内部的表示</p>
+<p>把游走的任务放在迭代器上，而不是聚合上。这样简化了聚合的接口和实现，也让责任各得其所</p>
+<h2 id="组合模式"><a href="#组合模式" class="headerlink" title="组合模式"></a>组合模式</h2><p>组合模式允许你将对象组合成树形结构来表现“整体/部分”层次结构。组合能让客户以一致的方式处理个别对象以及对象组合。</p>
+<p>空迭代器：返回一个迭代器，而这个迭代器的hasNext()永远返回false。</p>
+<p>客户可以将对象的集合以及个别的对象一视同仁。</p>
+<h2 id="状态模式"><a href="#状态模式" class="headerlink" title="状态模式"></a>状态模式</h2><blockquote>
+<p>状态模式允许对象在内部状态改变时改变它的行为，对象看起来好像修改了它的类</p>
+<p>封装基于状态的行为，并把行为委托到当前的状态</p>
+<p>代理模式<br>代理模式为另一个对象提供一个替身或占位符以控制对这个对象的访问。</p>
+</blockquote>
+<p>java中的rmi就是代理的例子，本地对象调用远程对象的方法，通过代理，中间通过客户服务对象和远程服务对象去交流，客户对象称为桩，stub.而服务辅助对象称为骨架，skeleton(jdk中有rmic)</p>
+<ul>
+<li>制作远程接口</li>
+<li>制作远程的实现</li>
+<li>利用rmic产生的stub和skeleton</li>
+<li>启动RMI registry<br>开始远程服务<br>使用代理模式创建代表（representative）对象，让代表对象控制某对象的访问，被代理的对象可以是远程的对象、创建开销大的对象或需要安全控制的对象。<h2 id=""><a href="#" class="headerlink" title="#"></a>#</h2></li>
+</ul>
+<ol>
+<li>远程代理：远程代理可以作为一个JVM对象的本地代表。调用代理的方法，会被代理利用网络转发到远程执行，并且结果会通过网络返回给代理，再由代理将结果转给客户</li>
+<li>虚拟代理:虚拟代理作为创建开销大的对象的代表。虚拟代理经常直到我们真正需要一个对象的时候才创建它。当对象在创建前和创建中时，由虚拟代理来扮演对象的替身。对象创建后，代理就会将请求直接委托给对象。</li>
+<li>动态代理：reflect包中，InvacationHandler以及Proxy的静态方法，利用这个包你可以在运行时动态地创建一个代理类，实现一个或多个接口，并将方法的调用转发到你所指定的类。因为实际的代理类是在运行时创建的，我们称这个Java技术为：动态代理（动态代理可以称为保护代理）</li>
+<li>代理动物园</li>
+<li><p>防火墙代理<br><br>控制网络资源的访问，保护主题免于“坏客户的侵害”</p>
+</li>
+<li><p>同步代理<br><br>在多线程的情况下为主题提供安全的访问</p>
+</li>
+<li><p>智能引用代理<br><br>当主题被引用时，进行额外的动作，例如计算一个对象被引用的次数</p>
+</li>
+<li><p>缓存代理<br><br>为开销大的运算结果提供暂时存储：它允许多个客户共享结果，以减少计算或网络延迟</p>
+</li>
+<li><p>复杂隐藏代理<br><br>用来隐藏一个类的复杂集合度，并进行访问控制。有时也称为外观代理，这不难理解。复杂隐藏代理和外观模式是不一样的，因为代理控制访问，而外观模式只提供另一种接口。</p>
+</li>
+<li><p>写入时复制代理<br><br>用来控制对象的复制，方法是延迟对象的复制，直到客户真正需要为止。这是虚拟代理的变体（CopyOnWriteArrayList）</p>
+</li>
+</ol>
+<h2 id="MVC"><a href="#MVC" class="headerlink" title="MVC"></a>MVC</h2><p>web开发人员也都在适配MVC，使它符合浏览器/服务器模型。使用Servlet和JSP技术的结合，来达到MVC分离的效果。这样的适配称为“Model2”</p>
+<h2 id="模式分类一"><a href="#模式分类一" class="headerlink" title="模式分类一"></a>模式分类一</h2><h3 id="创建型"><a href="#创建型" class="headerlink" title="创建型　"></a>创建型　</h3><p>涉及到对象实例化，这类模式都提供一个方法，将客户从所需要实例化的对象中解耦</p>
+<ul>
+<li>Singleton</li>
+<li>Builder</li>
+<li>Prototype</li>
+<li>Abstract Factory</li>
+<li><p>Factory Method</p>
+<h3 id="行为型"><a href="#行为型" class="headerlink" title="行为型"></a>行为型</h3><p>涉及到类和对象如何交互以及分配职责</p>
+</li>
+<li><p>Template Method</p>
+</li>
+<li>Interpreter</li>
+<li>Chain of Responsibility</li>
+<li>State</li>
+<li>Strategy</li>
+<li>Vistor</li>
+<li>Command</li>
+<li>Observer</li>
+<li>Mediator</li>
+<li>Iterator</li>
+<li><p>Memento</p>
+<h3 id="结构型"><a href="#结构型" class="headerlink" title="结构型"></a>结构型</h3><p>可以让你把类或对象组合到更强大的结构中</p>
+</li>
+<li><p>Decorator</p>
+</li>
+<li>Flyweight</li>
+<li>Adapter</li>
+<li>Composite</li>
+<li>Bridge</li>
+<li>Facade</li>
+<li><p>Proxy </p>
+<h2 id="模式分类二"><a href="#模式分类二" class="headerlink" title="模式分类二"></a>模式分类二</h2><h3 id="类"><a href="#类" class="headerlink" title="类"></a>类</h3><p>类模式描述类之间的关系如何通过继承定义。类模式的关系是在编译时建立的</p>
+</li>
+<li><p>Template Method</p>
+</li>
+<li>Factory Method</li>
+<li><p>Adapter<br>Interpreter</p>
+<h3 id="对象模式"><a href="#对象模式" class="headerlink" title="对象模式"></a>对象模式</h3><p>对象模式描述对象之间的关系，而且主要是利用组合定义。对象模式的关系通常是在运行时建立，而且更加动态、更有弹性</p>
+</li>
+<li><p>Composite</p>
+</li>
+<li>Decorator</li>
+<li>Proxy</li>
+<li>Strategy</li>
+<li>Bridge</li>
+<li>Flyweight</li>
+<li>Abstract Factory</li>
+<li>Singleton</li>
+<li>Visitor</li>
+<li>Command</li>
+<li>Facade</li>
+<li>Chain of Responsibility</li>
+<li>Mediaotr</li>
+<li>Prototype</li>
+<li>Builder</li>
+<li>Iterator</li>
+<li>Memento</li>
+<li>Observer</li>
+<li>State<h3 id="反模式"><a href="#反模式" class="headerlink" title="反模式"></a>反模式</h3>反模式告诉你如何采用一个不好的解决方案解决一个问题。反模式看起来总像是一个好的解决方案，但是当它真正被采用后，就会带来麻烦。反模式告诉我们不要陷入某种致命的诱惑<h3 id="桥接模式"><a href="#桥接模式" class="headerlink" title="桥接模式"></a>桥接模式</h3>不只改变你的实现，也改变你的抽象</li>
+</ul>
+<h3 id="生成器"><a href="#生成器" class="headerlink" title="生成器　"></a>生成器　</h3><p>封装一个产品的构造过程，不允许按步骤构造</p>
+<h3 id="责任链"><a href="#责任链" class="headerlink" title="责任链"></a>责任链</h3><p>当你想要让一个以上的对象有机会能够处理某个请求的时候，就使用责任链模式</p>
+<h3 id="蝇量"><a href="#蝇量" class="headerlink" title="蝇量"></a>蝇量</h3><p>如想让某个类的一个实例能用来提供许多的”虚拟实例”，就使用蝇量模式</p>
+<h3 id="解释器模式"><a href="#解释器模式" class="headerlink" title="解释器模式"></a>解释器模式</h3><p>使用解释器模式为语言创造解释器</p>
+<h3 id="中介者模式"><a href="#中介者模式" class="headerlink" title="中介者模式"></a>中介者模式</h3><p>使用中介者模式来集中相关对象之间复杂的沟通和控制方式</p>
+<h3 id="备忘录"><a href="#备忘录" class="headerlink" title="备忘录"></a>备忘录</h3><p>当你需要让对象返回之前的状态时（例如：你的用户请求撤销），就使用备忘录模式</p>
+<h3 id="原型"><a href="#原型" class="headerlink" title="原型"></a>原型</h3><p>当创建给定类的实例过程中很昂贵或很复杂时，就使用原型模式</p>
+<h3 id="访问者"><a href="#访问者" class="headerlink" title="访问者"></a>访问者</h3><p>当你需要为一个对象的组合增加新的能力，且封装并不重要时，就使用访问者模式</p>
+]]></content>
+    
+    <summary type="html">
+    
+      &lt;p&gt; 模式是在某情境下（context），针对某问题的解决方案&lt;/p&gt;
+&lt;h2 id=&quot;oo基础&quot;&gt;&lt;a href=&quot;#oo基础&quot; class=&quot;headerlink&quot; title=&quot;oo基础&quot;&gt;&lt;/a&gt;oo基础&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;抽象&lt;/li&gt;
+&lt;li&gt;封装&lt;/li&gt;
+&lt;li&gt;继承&lt;/li&gt;
+&lt;li&gt;多态
+    
+    </summary>
+    
+      <category term="编程" scheme="http://yoursite.com/categories/programming/"/>
+    
+    
+      <category term="android" scheme="http://yoursite.com/tags/android/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>CoordinatorLayout的使用</title>
+    <link href="http://yoursite.com/2017/03/08/CoordinatorLayout%E7%9A%84%E4%BD%BF%E7%94%A8/"/>
+    <id>http://yoursite.com/2017/03/08/CoordinatorLayout的使用/</id>
+    <published>2017-03-08T03:45:18.000Z</published>
+    <updated>2018-01-03T01:46:34.283Z</updated>
+    
+    <content type="html"><![CDATA[<h1 id="Coordinator-Layout的使用"><a href="#Coordinator-Layout的使用" class="headerlink" title="Coordinator Layout的使用"></a>Coordinator Layout的使用</h1><h2 id="CoordinatorLayout的作用"><a href="#CoordinatorLayout的作用" class="headerlink" title="CoordinatorLayout的作用?"></a>CoordinatorLayout的作用?</h2><p>CoordinatorLayout作为”super-powered FrameLayout” 基本实现两个功能:</p>
 <ol>
 <li>作为顶层布局</li>
 <li><p>调度协调子布局</p>
 <p> <code>CoordinatorLayout使用新的思路通过协调调度子布局的形式实现触摸影响布局的形式产生动画效果.CoordinatorLayout通过设置
- View的Behaviors来调度协调子布局.</code></p>
+ View的Behaviors来调度协调子布局.</code><a id="more"></a></p>
 </li>
 </ol>
 <p><strong>加入类库:</strong></p>
 <pre><code>compile &apos;com.android.support:design:22.2.1&apos;
-</code></pre><h3 id="二、-CoordinatorLayout的简单使用案例"><a href="#二、-CoordinatorLayout的简单使用案例" class="headerlink" title="二、 CoordinatorLayout的简单使用案例"></a>二、 CoordinatorLayout的简单使用案例</h3><pre><code>&lt;?xml version=&quot;1.0&quot; encoding=&quot;utf-8&quot;?&gt;
+</code></pre><p><strong>CoordinatorLayout的简单使用案例</strong></p>
+<pre><code>&lt;?xml version=&quot;1.0&quot; encoding=&quot;utf-8&quot;?&gt;
 &lt;android.support.design.widget.CoordinatorLayout
 xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;
 xmlns:app=&quot;http://schemas.android.com/apk/res-auto&quot;
@@ -132,8 +508,7 @@ android:fitsSystemWindows=&quot;true&quot;
     app:layout_anchorGravity=&quot;bottom|right|end&quot;
     /&gt;
 &lt;/android.support.design.widget.CoordinatorLayout&gt;
-</code></pre><p>我们看一下这个Layout结构,CoordinatorLayout包含三个子控件:</p>
-<p>AppbarLayout,Scrolleable view和anchorFloatingActionBar.</p>
+</code></pre><p><strong><em>我们看一下这个Layout结构,CoordinatorLayout包含三个子控件:<br>AppbarLayout,Scrolleable view和anchorFloatingActionBar.</em></strong></p>
 <pre><code>&lt;CoordinatorLayout&gt;
     &lt;AppbarLayout/&gt;
     &lt;ScrollableView/&gt;
@@ -359,8 +734,8 @@ private float getFabTranslationYForSnackbar(CoordinatorLayout parent,
     return minOffset;
 }
     }
-</code></pre><hr>
-<pre><code>&lt;android.support.design.widget.CoordinatorLayout xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;
+
+&lt;android.support.design.widget.CoordinatorLayout xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;
 xmlns:app=&quot;http://schemas.android.com/apk/res-auto&quot;
 android:id=&quot;@+id/main_content&quot;
 android:layout_width=&quot;match_parent&quot;
@@ -382,70 +757,233 @@ android:fitsSystemWindows=&quot;true&quot;&gt;
     
     <summary type="html">
     
-      &lt;h1 id=&quot;Coordinator-Layout的使用&quot;&gt;&lt;a href=&quot;#Coordinator-Layout的使用&quot; class=&quot;headerlink&quot; title=&quot;Coordinator Layout的使用&quot;&gt;&lt;/a&gt;Coordinator Layout的使用&lt;/
+      &lt;h1 id=&quot;Coordinator-Layout的使用&quot;&gt;&lt;a href=&quot;#Coordinator-Layout的使用&quot; class=&quot;headerlink&quot; title=&quot;Coordinator Layout的使用&quot;&gt;&lt;/a&gt;Coordinator Layout的使用&lt;/h1&gt;&lt;h2 id=&quot;CoordinatorLayout的作用&quot;&gt;&lt;a href=&quot;#CoordinatorLayout的作用&quot; class=&quot;headerlink&quot; title=&quot;CoordinatorLayout的作用?&quot;&gt;&lt;/a&gt;CoordinatorLayout的作用?&lt;/h2&gt;&lt;p&gt;CoordinatorLayout作为”super-powered FrameLayout” 基本实现两个功能:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;作为顶层布局&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;调度协调子布局&lt;/p&gt;
+&lt;p&gt; &lt;code&gt;CoordinatorLayout使用新的思路通过协调调度子布局的形式实现触摸影响布局的形式产生动画效果.CoordinatorLayout通过设置
+ View的Behaviors来调度协调子布局.&lt;/code&gt;
     
     </summary>
     
+      <category term="编程" scheme="http://yoursite.com/categories/programming/"/>
+    
+    
+      <category term="android" scheme="http://yoursite.com/tags/android/"/>
     
   </entry>
   
   <entry>
-    <title></title>
-    <link href="http://yoursite.com/2016/09/03/nice/"/>
-    <id>http://yoursite.com/2016/09/03/nice/</id>
-    <published>2016-09-03T06:09:38.037Z</published>
-    <updated>2016-09-03T05:43:39.490Z</updated>
+    <title>自定义注解</title>
+    <link href="http://yoursite.com/2017/02/10/%E8%87%AA%E5%AE%9A%E4%B9%89%E6%B3%A8%E8%A7%A3/"/>
+    <id>http://yoursite.com/2017/02/10/自定义注解/</id>
+    <published>2017-02-10T09:45:01.000Z</published>
+    <updated>2018-01-03T01:39:36.772Z</updated>
     
-    <content type="html"><![CDATA[<h1 id="NexT"><a href="#NexT" class="headerlink" title="NexT"></a>NexT</h1><blockquote>
-<p>精于心，简于形</p>
-</blockquote>
-<p><a href="http://notes.iissnan.com" target="_blank">在线预览 Preview</a> | <a href="http://theme-next.iissnan.com" target="_blank">NexT 使用文档</a> |  <a href="README.en.md">English Documentation</a></p>
-<p><a href="https://gitter.im/iissnan/hexo-theme-next?utm_source=badge&amp;utm_medium=badge&amp;utm_campaign=pr-badge&amp;utm_content=badge" target="_blank" rel="external"><img src="https://badges.gitter.im/Join%20Chat.svg" alt="Join the chat at https://gitter.im/iissnan/hexo-theme-next"></a></p>
-<p><img src="http://iissnan.com/nexus/next/next-schemes.jpg" alt="NexT Schemes"></p>
-<h2 id="浏览器支持-Browser-support"><a href="#浏览器支持-Browser-support" class="headerlink" title="浏览器支持 Browser support"></a>浏览器支持 Browser support</h2><p><img src="http://iissnan.com/nexus/next/browser-support.png" alt="Browser support"></p>
-<h2 id="贡献-Contributing"><a href="#贡献-Contributing" class="headerlink" title="贡献 Contributing"></a>贡献 Contributing</h2><p>接受各种形式的贡献，包括不限于提交问题与需求，修复代码。等待您的<code>Pull Request</code>。</p>
-<p>Any types of contribution are welcome. Thanks.</p>
-<h2 id="开发-Development"><a href="#开发-Development" class="headerlink" title="开发 Development"></a>开发 Development</h2><p>NexT 主旨在于简洁优雅且易于使用，所以首先要尽量确保 NexT 的简洁易用性。</p>
-<p>NexT is built for easily use with elegant appearance. First things first, always keep things simple.</p>
-<h2 id="开发历史-Changelog"><a href="#开发历史-Changelog" class="headerlink" title="开发历史 Changelog"></a><a href="https://github.com/iissnan/hexo-theme-next/wiki/Changelog" target="_blank" rel="external">开发历史 Changelog</a></h2><p><a href="http://hexo.io" target="_blank" rel="external"><img src="http://img.shields.io/badge/Hexo-2.4+-2BAF2B.svg?style=flat-square" alt="hexo-image"></a><br><a href="http://bower.io" target="_blank" rel="external"><img src="http://img.shields.io/badge/Bower-*-2BAF2B.svg?style=flat-square" alt="bower-image"></a><br><a href="http://jquery.com/" target="_blank" rel="external"><img src="https://img.shields.io/badge/jquery-2.1-2BAF2B.svg?style=flat-square" alt="jquery-image"></a><br><a href="http://julian.com/research/velocity/" target="_blank" rel="external"><img src="https://img.shields.io/badge/Velocity-1.2-2BAF2B.svg?style=flat-square" alt="velocity-image"></a></p>
-]]></content>
+    <content type="html"><![CDATA[<h1 id="自定义注解"><a href="#自定义注解" class="headerlink" title="自定义注解"></a>自定义注解</h1><h2 id="什么是注解"><a href="#什么是注解" class="headerlink" title="什么是注解"></a>什么是注解</h2><p>Annotation（注解）就是Java提供了一种元程序中的元素关联任何信息和着任何元数据（metadata）的途径和方法。Annotion(注解)是一个接口，程序可以通过反射来获取指定程序元素的 Annotion对象，然后通过 Annotion对象 来获取注解里面的元数据。<br><a id="more"></a></p>
+<p>Annotation（注解）是JDK5.0及以后版本引入的。它可以用于创建文档，跟踪代码中的依赖性，甚至执行基本编译时检查。从某些方面看，annotation 就像修饰符一样被使用，并应用于包、类 型、构造方法、方法、成员变量、参数、本地变量的声明中。这些信息被存储在 Annotation 的 “name=value” 结构对中。</p>
+<h2 id="什么是metadata元数据"><a href="#什么是metadata元数据" class="headerlink" title="什么是metadata元数据"></a>什么是metadata元数据</h2><p>元数据从 metadata 一词译来，就是“关于数据的数据”的意思。</p>
+<p>元数据的功能作用有很多，比如：你可能用过 Javadoc 的注释自动生成文档。这就是元数据功能的一种。总的来说，元数据可以用来创建文档，跟踪代码的依赖性，执行编译时格式检查，代替已有的配置文件。如果要对于元数据的作用进行分类，目前还没有明确的定义，不过我们可以根据它所起的作用，大致可分为三类： </p>
+<ol>
+<li><p>编写文档：通过代码里标识的元数据生成文档</p>
+</li>
+<li><p>代码分析：通过代码里标识的元数据对代码进行分析</p>
+</li>
+<li><p>编译检查：通过代码里标识的元数据让编译器能实现基本的编译检查</p>
+</li>
+</ol>
+<h2 id="Annotation和Annotation类型"><a href="#Annotation和Annotation类型" class="headerlink" title="Annotation和Annotation类型"></a>Annotation和Annotation类型</h2><p>Annotation 使用了在 java5.0 所带来的新语法，它的行为十分类似 public、final 这样的修饰符。每个 Annotation 具有 一个名字 和 成员个数&gt;=0。每个 Annotation 的成员具有被称为 name=value 对的名字和值（就像 javabean 一样），name=value 装载了 Annotation 的信息。</p>
+<p>Annotation类型 定义了 Annotation 的名字、类型、成员默认值。一个 Annotation类型 可以说是一个特殊的java接口，它的成员变量是受限制的，而声明 Annotation类型 时需要使用新语法。当我们通过 java反射api 访问 Annotation 时，返回值将是一个实现了该  annotation类型 接口的对象，通过访问这个对象我们能方便的访问到其 Annotation 成员。后面的章节将提到在 java5.0 的 java.lang 包里包含的3个标准 Annotation类型。</p>
+<h2 id="注解的分类"><a href="#注解的分类" class="headerlink" title="注解的分类"></a>注解的分类</h2><p>根据注解的参数个数分类：</p>
+<ol>
+<li><p>标记注解，一个没有成员的Annotation类型被称为标记注解，这种类型仅仅使用自身的存在与否来为我们提供信息，比如常见的@Override</p>
+</li>
+<li><p>单值注解</p>
+</li>
+<li><p>完整注解</p>
+</li>
+</ol>
+<p>根据注解使用的方法和用途分类：</p>
+<ol>
+<li><p>JDK内置系统注解</p>
+</li>
+<li><p>元注解</p>
+</li>
+<li><p>自定义注解</p>
+</li>
+</ol>
+<h2 id="元注解"><a href="#元注解" class="headerlink" title="元注解"></a>元注解</h2><p>元注解的作用就是负责注解其他注解，Java 5.0定义了 4个meta-annotation 类型，用来提供对爱他的 annotation 类型做说明。</p>
+<p>java.lang.annotation</p>
+<p>@Target</p>
+<p>@Retention</p>
+<p>@Document</p>
+<p>@Inhrited</p>
+<p>@Target</p>
+<p>修饰的对象范围：packages、types（类、接口、枚举、Annotation类型）、类型成员（方法、构造方法、成员变量、枚举值）、方法参数和本地变量（如循环变量、catch参数）。</p>
+<p>作用：用于描述注解的使用范围。</p>
+<p>ElementType 取值：</p>
+<ol>
+<li><p>CONSTRUCTOR:用于描述构造器</p>
+</li>
+<li><p>FIELD:用于描述域</p>
+</li>
+<li><p>LOCAL_VARIABLE:用于描述局部变量</p>
+</li>
+<li><p>METHOD:用于描述方法</p>
+</li>
+<li><p>PACKAGE:用于描述包</p>
+</li>
+<li><p>PARAMETER:用于描述参数</p>
+</li>
+<li><p>TYPE:用于描述类、接口(包括注解类型) 或enum声明</p>
+</li>
+</ol>
+<p>例如，Name 可以注解类的成员变量：</p>
+<pre><code>@Target(ElementType.FIELD)@Documented
+public @interface Name {    
+    String value() default &quot;&quot;;
+}
+</code></pre><p>Person 可以注解类、接口（包括注解类型）、或者enum声明:</p>
+<pre><code>@Target(ElementType.TYPE)
+public @interface Person {
+    String value() default &quot;&quot;;
+}
+</code></pre><p>@Retention</p>
+<p>定义了该 Annotation 被保留的时间长短：某些 Annotation 仅出现在源代码中，而被编译器丢弃；而另一些却被编译在class文件中；编译在class文件中的Annotation可能会被虚拟机忽略，而另一些在 class 被装载时将被读取（请注意并不影响 class 的执行，因为 Annotation 与 class 在使用上是被分离的）。使用这个 meta-Annotation 可以对  Annotation 的“生命周期”限制。</p>
+<p>作用：表示需要在什么级别保存该注释信息，用于描述注解的生命周期（即：被描述的注解在什么范围内有效）</p>
+<p>RetentionPoicy取值:</p>
+<p>SOURCE:在源文件中有效（即源文件保留）</p>
+<p>CLASS:在class文件中有效（即class保留）</p>
+<p>RUNTIME:在运行时有效（即运行时保留）</p>
+<p>例如：Name 注解的 RetentionPolicy 的值为 RUNTIME，这样注解处理器可以通过反射，获取到该注解的属性，从而做一些运行时的逻辑处理。</p>
+<p>@Target(ElementType.FIELD)<br>@Retention(RetentionPolicy.RUNTIME)<br>public @interface Name {<br>    String value() default “”;<br>}<br>@Document</p>
+<p>用于描述其它类型的 annotation 应该被作为被标注的程序成员的公共API，因此可以被例如 javadoc 此类的工具文档化。Documented 是一个标记注解，没有成员。</p>
+<p>作用：表示需要在什么级别保存该注释信息，用于描述注解的生命周期（即：被描述的注解在什么范围内有效）。</p>
+<pre><code>@Target(ElementType.FIELD)
+@Retention(RetentionPolicy.RUNTIME)
+@Documented
+public @interface Name {
+    String value() default &quot;&quot;;
+}
+</code></pre><p>@Inhrited</p>
+<p>是一个标记注解，@Inherited 阐述了某个被标注的类型是被继承的。如果一个使用了@Inherited 修饰的 annotation类型 被用于一个 class，则这个 annotation 将被用于该class的子类。</p>
+<p>@Inherited annotation类型 是被标注过的class的子类所继承。类并不从它所实现的接口继承annotation，方法并不从它所重载的方法继承annotation</p>
+<p>当 @Inherited annotation类型 标注的 annotation 的 Retention 是 RetentionPolicy.RUNTIME，则反射API增强了这种继承性。如果我们使用java.lang.reflect 去查询一个 @Inherited annotation类型 的 annotation 时，反射代码检查将展开工作：检查class和其父类，直到发现指定的 annotation 类型被发现，或者到达类继承结构的顶层。</p>
+<h2 id="自定义注解-1"><a href="#自定义注解-1" class="headerlink" title="自定义注解"></a>自定义注解</h2><p>使用 @interface 自定义注解时，自动继承了 java.lang.annotation.Annotation 接口，由编译程序自动完成其他细节。在定义注解时，不能继承其他的注解或接口。@interface 用来声明一个注解，其中的每一个方法实际上是声明了一个配置参数。方法的名称就是参数的名称，返回值类型就是参数的类型（返回值类型只能是 基本类型、Class、String、enum）。可以通过 default 来声明参数的默认值。</p>
+<p>自定义注解格式：</p>
+<p>public @interface 注解名{注解体}</p>
+<p>所有基本数据类型（int,float,boolean,byte,double,char,long,short)</p>
+<p>String类型</p>
+<p>Class类型</p>
+<p>enum类型</p>
+<p>Annotation类型</p>
+<p>以上所有类型的数组</p>
+<p>Annotation类型里面的参数该怎么设定:</p>
+<p>第一,只能用 public 或 默认(default) 这两个访问权修饰.例如,String value();这里把方法设为 defaul 默认类型；</p>
+<p>第二,参数成员只能用基本类型 byte,short,char,int,long,float,double,boolean 八种基本数据类型 和 String,Enum,Class,annotations 等数据类型,以及这一些类型的数组.例如,String value();这里的参数成员就为String;</p>
+<p>第三,如果只有一个参数成员,最好把参数名称设为”value”,后加小括号.例:下面的例子 Name 注解就只有一个参数成员。</p>
+<p>Name 姓名注解：</p>
+<p>Gander 性别注解：</p>
+<p>Profile 个人资料注解：</p>
+<p>注解元素的默认值</p>
+<p>注解元素必须有确定的值，要么在定义注解的默认值中指定，要么在使用注解时指定，非基本类型的注解元素的值不可为null。因此, 使用空字符串或0作为默认值是一种常用的做法。这个约束使得处理器很难表现一个元素的存在或缺失的状态，因为每个注解的声明中，所有元素都存在，并且都具有相应的值，为了绕开这个约束，我们只能定义一些特殊的值，例如空字符串或者负数，一次表示某个元素不存在，在定义注解时，这已经成为一个习惯用法。</p>
+<p>注解处理器类库(java.lang.reflect.AnnotatedElement)</p>
+<p>注解元素Java使用 Annotation 接口来代表程序元素前面的注解，该接口是所有 Annotation类型 的父接口。除此之外，Java 在 java.lang.reflect 包下新增了 AnnotatedElement 接口，该接口代表程序中可以接受注解的程序元素，该接口主要有如下几个实现类：</p>
+<p>Class：类定义</p>
+<p>Constructor：构造器定义</p>
+<p>Field：累的成员变量定义</p>
+<p>Method：类的方法定义</p>
+<p>Package：类的包定义</p>
+<p>当一个 Annotation 被定义为运行时Annotation后，改注解才是运行时可见的，当class文件被装载时被保存在class文件中的Annotation才会被虚拟机读取。 </p>
+<p>AnnotatedElement 接口提供了以下四个方法来访问 Annotation 的信息：</p>
+<p>方法1：<t extends="" annotation=""> T getAnnotation(Class<t> annotationClass): 返回改程序元素上存在的、指定类型的注解，如果该类型注解不存在，则返回null。</t></t></p>
+<p>方法2：Annotation[] getAnnotations():返回该程序元素上存在的所有注解。</p>
+<p>方法3：boolean is AnnotationPresent(Class&lt;?extends Annotation&gt; annotationClass):判断该程序元素上是否包含指定类型的注解，存在则返回true，否则返回false.</p>
+<p>方法4：Annotation[] getDeclaredAnnotations()：返回直接存在于此元素上的所有注释。与此接口中的其他方法不同，该方法将忽略继承的注释。（如果没有注释直接存在于此元素上，则返回长度为零的一个数组。）该方法的调用者可以随意修改返回的数组；这不会对其他调用者返回的数组产生任何影响。</p>
+<p>我们为前面定义好的自定义注解写一个简单的处理器：</p>
+<pre><code>public class CustomUtils {
+private static final String TAG = &quot;CustomUtils&quot;;
+public static void getInfo(Class&lt;?&gt; clazz) {
+    String name = &quot;&quot;;
+    String gender = &quot;&quot;;
+    String profile = &quot;&quot;;
+    Field[] fields = clazz.getDeclaredFields();
+    for (Field field :
+            fields) {
+        if(field.isAnnotationPresent(AnnotationDemo.Name2.class)){
+            AnnotationDemo.Name2 arg0 = field.getAnnotation(AnnotationDemo.Name2.class);
+            name = name+arg0.value();
+            System.out.println(name);
+        }
+        if(field.isAnnotationPresent(AnnotationDemo.Gendar.class)){
+            AnnotationDemo.Gendar arg0 = field.getAnnotation(AnnotationDemo.Gendar.class);
+            gender = gender+arg0.gender().getValue();
+            System.out.println(gender);
+            //Log.e(TAG, &quot;gender=&quot;+gender);
+        }
+        if(field.isAnnotationPresent(AnnotationDemo.Profile.class)){
+            AnnotationDemo.Profile arg0 = field.getAnnotation(AnnotationDemo.Profile.class);
+            System.out.println(&quot;profile=&quot;+profile+&quot;[id:&quot;+arg0.id()+&quot;\nheight:&quot;+arg0.height()+&quot;\nnativePlace:&quot;+arg0.nativePlace()+&quot;]&quot;);
+        }
+    }
+
+}
+</code></pre><p>}</p>
+<p>使用自定义注解：</p>
+<pre><code>public class Person {
+@AnnotationDemo.Name2(&quot;苏思宁&quot;)
+private String name;
+
+@AnnotationDemo.Gendar(gender = AnnotationDemo.Gendar.GenderType.Female)
+private String gender;
+
+@AnnotationDemo.Profile(id = 001,height = 127,nativePlace = &quot;安徽宿松&quot;)
+private String profile;
+
+public String getGender() {
+    return gender;
+}
+
+public void setGender(String gender) {
+    this.gender = gender;
+}
+
+public String getProfile() {
+    return profile;
+}
+
+public void setProfile(String profile) {
+    this.profile = profile;
+}
+
+public String getName() {
+    return name;
+}
+
+public void setName(String name) {
+    this.name = name;
+}
+}
+</code></pre><p>运行：</p>
+<pre><code>CustomUtils.getInfo(Person.class);
+</code></pre><p>输出：</p>
+<pre><code>苏思宁
+女
+profile=[id:1
+height:127
+nativePlace:安徽宿松]
+</code></pre>]]></content>
     
     <summary type="html">
     
-      &lt;h1 id=&quot;NexT&quot;&gt;&lt;a href=&quot;#NexT&quot; class=&quot;headerlink&quot; title=&quot;NexT&quot;&gt;&lt;/a&gt;NexT&lt;/h1&gt;&lt;blockquote&gt;
-&lt;p&gt;精于心，简于形&lt;/p&gt;
-&lt;/blockquote&gt;
-&lt;p&gt;&lt;a href=&quot;http://note
+      &lt;h1 id=&quot;自定义注解&quot;&gt;&lt;a href=&quot;#自定义注解&quot; class=&quot;headerlink&quot; title=&quot;自定义注解&quot;&gt;&lt;/a&gt;自定义注解&lt;/h1&gt;&lt;h2 id=&quot;什么是注解&quot;&gt;&lt;a href=&quot;#什么是注解&quot; class=&quot;headerlink&quot; title=&quot;什么是注解&quot;&gt;&lt;/a&gt;什么是注解&lt;/h2&gt;&lt;p&gt;Annotation（注解）就是Java提供了一种元程序中的元素关联任何信息和着任何元数据（metadata）的途径和方法。Annotion(注解)是一个接口，程序可以通过反射来获取指定程序元素的 Annotion对象，然后通过 Annotion对象 来获取注解里面的元数据。&lt;br&gt;
     
     </summary>
     
+      <category term="编程" scheme="http://yoursite.com/categories/programming/"/>
     
-  </entry>
-  
-  <entry>
-    <title>Hello World</title>
-    <link href="http://yoursite.com/2016/09/03/hello-world/"/>
-    <id>http://yoursite.com/2016/09/03/hello-world/</id>
-    <published>2016-09-03T02:42:20.890Z</published>
-    <updated>2016-09-03T02:42:20.890Z</updated>
     
-    <content type="html"><![CDATA[<p>Welcome to <a href="https://hexo.io/" target="_blank" rel="external">Hexo</a>! This is your very first post. Check <a href="https://hexo.io/docs/" target="_blank" rel="external">documentation</a> for more info. If you get any problems when using Hexo, you can find the answer in <a href="https://hexo.io/docs/troubleshooting.html" target="_blank" rel="external">troubleshooting</a> or you can ask me on <a href="https://github.com/hexojs/hexo/issues" target="_blank" rel="external">GitHub</a>.</p>
-<h2 id="Quick-Start"><a href="#Quick-Start" class="headerlink" title="Quick Start"></a>Quick Start</h2><h3 id="Create-a-new-post"><a href="#Create-a-new-post" class="headerlink" title="Create a new post"></a>Create a new post</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">$ hexo new <span class="string">"My New Post"</span></div></pre></td></tr></table></figure>
-<p>More info: <a href="https://hexo.io/docs/writing.html" target="_blank" rel="external">Writing</a></p>
-<h3 id="Run-server"><a href="#Run-server" class="headerlink" title="Run server"></a>Run server</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">$ hexo server</div></pre></td></tr></table></figure>
-<p>More info: <a href="https://hexo.io/docs/server.html" target="_blank" rel="external">Server</a></p>
-<h3 id="Generate-static-files"><a href="#Generate-static-files" class="headerlink" title="Generate static files"></a>Generate static files</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">$ hexo generate</div></pre></td></tr></table></figure>
-<p>More info: <a href="https://hexo.io/docs/generating.html" target="_blank" rel="external">Generating</a></p>
-<h3 id="Deploy-to-remote-sites"><a href="#Deploy-to-remote-sites" class="headerlink" title="Deploy to remote sites"></a>Deploy to remote sites</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">$ hexo deploy</div></pre></td></tr></table></figure>
-<p>More info: <a href="https://hexo.io/docs/deployment.html" target="_blank" rel="external">Deployment</a></p>
-]]></content>
-    
-    <summary type="html">
-    
-      &lt;p&gt;Welcome to &lt;a href=&quot;https://hexo.io/&quot; target=&quot;_blank&quot; rel=&quot;external&quot;&gt;Hexo&lt;/a&gt;! This is your very first post. Check &lt;a href=&quot;https://hexo.
-    
-    </summary>
-    
+      <category term="android" scheme="http://yoursite.com/tags/android/"/>
     
   </entry>
   
